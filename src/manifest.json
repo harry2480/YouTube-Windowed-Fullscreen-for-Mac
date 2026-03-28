@@ -3,6 +3,11 @@
   "name": "YouTube Windowed Fullscreen for Mac",
   "version": "1.0.0",
   "description": "Prevent YouTube fullscreen from creating new Space on macOS",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": [
     "scripting",
     "storage",
@@ -26,6 +31,11 @@
   ],
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "YouTube Windowed Fullscreen"
+    "default_title": "YouTube Windowed Fullscreen",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   }
 }
