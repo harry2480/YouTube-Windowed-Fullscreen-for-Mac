@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Windowed Fullscreen for Mac",
+  "version": "1.0.0",
+  "description": "Prevent YouTube fullscreen from creating new Space on macOS",
+  "permissions": [
+    "scripting",
+    "storage",
+    "activeTab",
+    "windows"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["src/content-script.ts"],
+      "css": ["src/content.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "YouTube Windowed Fullscreen"
+  }
+}

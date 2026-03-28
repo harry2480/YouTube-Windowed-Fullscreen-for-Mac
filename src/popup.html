@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Windowed Fullscreen</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>YouTube Windowed Fullscreen</h1>
+      <p class="version" id="version">v1.0.0</p>
+    </div>
+
+    <div class="content">
+      <div class="toggle-group">
+        <label for="toggle-switch" class="label">機能を有効にする</label>
+        <div class="toggle-switch">
+          <input
+            type="checkbox"
+            id="toggle-switch"
+            class="toggle-input"
+            checked
+          />
+          <label for="toggle-switch" class="toggle-label"></label>
+        </div>
+      </div>
+
+      <div class="info">
+        <p class="info-text">
+          YouTubeの「f」キーでフルスクリーン表示時に、新しいSpaceへの移動を阻止します。
+        </p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p class="footer-text">macOS用 - © 2024</p>
+    </div>
+  </div>
+
+  <script src="popup.ts" type="module"></script>
+</body>
+</html>

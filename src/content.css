@@ -1,0 +1,90 @@
+/* Activate Fullscreen Mode */
+body.yw-fullscreen-active {
+  overflow: hidden !important;
+  background-color: #000 !important;
+}
+
+body.yw-fullscreen-active::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Hide Unnecessary UI */
+body.yw-fullscreen-active #masthead-container,
+body.yw-fullscreen-active #secondary,
+body.yw-fullscreen-active #comments,
+body.yw-fullscreen-active #below,
+body.yw-fullscreen-active ytp-upnext,
+body.yw-fullscreen-active #chat,
+body.yw-fullscreen-active #chat-container,
+body.yw-fullscreen-active tp-yt-app-drawer,
+body.yw-fullscreen-active #guide {
+  display: none !important;
+}
+
+/* Disable Containing Blocks (Bust out of fixed position constraints) */
+body.yw-fullscreen-active ytd-app,
+body.yw-fullscreen-active ytd-page-manager,
+body.yw-fullscreen-active ytd-watch-flexy,
+body.yw-fullscreen-active #columns,
+body.yw-fullscreen-active #primary,
+body.yw-fullscreen-active #primary-inner,
+body.yw-fullscreen-active #player,
+body.yw-fullscreen-active #full-bleed-container,
+body.yw-fullscreen-active #player-full-bleed-container,
+body.yw-fullscreen-active ytd-player,
+body.yw-fullscreen-active #container {
+  contain: none !important;
+  transform: none !important;
+  will-change: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: auto !important;
+}
+
+/* Movie Player Overlay */
+body.yw-fullscreen-active #movie_player {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 2147483647 !important;
+  background-color: #000 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+}
+
+/* Ensure Video Container and Video Element act properly */
+body.yw-fullscreen-active #movie_player .html5-video-container,
+body.yw-fullscreen-active #movie_player video {
+  position: absolute !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  left: 0 !important;
+  top: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  object-fit: contain !important; /* Perfectly handles aspect ratio & letterboxing */
+}
+
+/* Ensure video player controls scale up symmetrically to screen width */
+body.yw-fullscreen-active #movie_player .ytp-chrome-bottom {
+  width: calc(100vw - 48px) !important;
+  left: 24px !important;
+  z-index: 2147483648 !important;
+}
+
+body.yw-fullscreen-active #movie_player .ytp-chrome-top {
+  width: calc(100vw - 48px) !important;
+  left: 24px !important;
+  z-index: 2147483648 !important;
+}
+
+body.yw-fullscreen-active #movie_player .ytp-gradient-bottom,
+body.yw-fullscreen-active #movie_player .ytp-gradient-top {
+  width: 100vw !important;
+  left: 0 !important;
+  z-index: 2147483648 !important;
+}

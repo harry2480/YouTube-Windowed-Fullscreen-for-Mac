@@ -1,0 +1,18 @@
+{
+  "name": "youtube-windowed-fullscreen-for-mac",
+  "version": "1.0.0",
+  "description": "Prevent YouTube fullscreen from creating new Space on macOS",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0",
+    "@types/chrome": "^0.0.246",
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0"
+  }
+}
