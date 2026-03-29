@@ -45,15 +45,6 @@ function applyPseudoFullscreen(player: HTMLElement): void {
   // Dispatch resize event to prompt YouTube's video player to update its canvas/video dimension
   window.dispatchEvent(new Event('resize'));
 
-  // Request background script to maximize the window without going into native macOS Fullscreen
-  if (chrome.runtime && chrome.runtime.id) {
-    try {
-      chrome.runtime.sendMessage({ action: 'maximizeWindow' });
-    } catch (error) {
-      console.warn('[YouTube WFS] Failed to send maximize message:', error);
-    }
-  }
-
   console.log('[YouTube WFS] Pseudo-fullscreen applied via CSS class');
   isPseudoFullscreenActive = true;
 }
@@ -67,15 +58,6 @@ function removePseudoFullscreen(player: HTMLElement): void {
   
   // Trigger UI resize update
   window.dispatchEvent(new Event('resize'));
-
-  // Request background script to restore the window size
-  if (chrome.runtime && chrome.runtime.id) {
-    try {
-      chrome.runtime.sendMessage({ action: 'restoreWindow' });
-    } catch (error) {
-      console.warn('[YouTube WFS] Failed to send restore message:', error);
-    }
-  }
 
   console.log('[YouTube WFS] Pseudo-fullscreen removed via CSS class');
   isPseudoFullscreenActive = false;

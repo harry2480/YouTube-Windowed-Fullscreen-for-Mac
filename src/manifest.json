@@ -11,16 +11,11 @@
   "permissions": [
     "scripting",
     "storage",
-    "activeTab",
-    "windows"
+    "activeTab"
   ],
   "host_permissions": [
     "https://www.youtube.com/*"
   ],
-  "background": {
-    "service_worker": "src/background.ts",
-    "type": "module"
-  },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],
