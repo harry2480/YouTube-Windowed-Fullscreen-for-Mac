@@ -42,7 +42,13 @@ function getMoviePlayer(): HTMLElement | null {
  * pages, hiding the masthead/guide for nothing. Require a real layout box.
  */
 function isPlayerActive(player: HTMLElement): boolean {
-  return player.offsetWidth > 0 && player.offsetHeight > 0;
+  // Must have a real layout box (excludes the idle off-screen player).
+  if (player.offsetWidth === 0 || player.offsetHeight === 0) return false;
+  // Must not be the small corner miniplayer — it is visible but going
+  // "fullscreen" from it would hide the masthead/guide of whatever page
+  // the user is actually browsing.
+  if (player.closest('ytd-miniplayer')) return false;
+  return true;
 }
 
 /**
