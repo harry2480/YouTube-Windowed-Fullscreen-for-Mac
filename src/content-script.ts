@@ -85,8 +85,19 @@ function handleKeyDown(event: KeyboardEvent): void {
 
   // Handle 'f' key for fullscreen toggle
   if (event.key === 'f' || event.key === 'F') {
+    // Don't interfere with browser/OS shortcuts such as Cmd+F / Ctrl+F (find in page)
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+
     // Allow normal text input if focused on input field
     if (isFocusedOnInputField()) {
+      return;
+    }
+
+    // Only intercept when a video player actually exists on the page
+    // (avoids hijacking 'f' on the home page, search results, etc.)
+    if (!getMoviePlayer()) {
       return;
     }
 
