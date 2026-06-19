@@ -8,9 +8,44 @@
  * moved (not reloaded), so playback position, login and player state are kept.
  */
 
-// Tabs currently shown in a chromeless popup → the window they came from, so we
-// can move them back on exit.
-const chromelessOrigin = new Map<number, number>();
+// MV3 service workers are evicted when idle, so in-memory state would be lost
+// mid-session (e.g. the user watches for a minute, then can't exit). We persist
+// the "tab → window it came from" mapping in chrome.storage.session, which
+// survives worker restarts for the lifetime of the browser session.
+const STORAGE_KEY = 'chromelessOrigin';
+
+type OriginMap = Record<string, number>;
+
+async function readOrigins(): Promise<OriginMap> {
+  const data = await chrome.storage.session.get(STORAGE_KEY);
+  return (data[STORAGE_KEY] as OriginMap | undefined) ?? {};
+}
+
+async function rememberOrigin(tabId: number, windowId: number): Promise<void> {
+  const origins = await readOrigins();
+  origins[tabId] = windowId;
+  await chrome.storage.session.set({ [STORAGE_KEY]: origins });
+}
+
+/** Remove and return the stored origin window for a tab. */
+async function takeOrigin(tabId: number): Promise<number | undefined> {
+  const origins = await readOrigins();
+  const windowId = origins[tabId];
+  if (tabId in origins) {
+    delete origins[tabId];
+    await chrome.storage.session.set({ [STORAGE_KEY]: origins });
+  }
+  return windowId;
+}
+
+async function hasOrigin(tabId: number): Promise<boolean> {
+  const origins = await readOrigins();
+  return tabId in origins;
+}
+
+function isYouTube(url: string | undefined): boolean {
+  return !!url && url.startsWith('https://www.youtube.com/');
+}
 
 /**
  * Move the given tab into a borderless, maximized popup window and tell its
@@ -18,17 +53,36 @@ const chromelessOrigin = new Map<number, number>();
  */
 async function enterChromeless(tab: chrome.tabs.Tab): Promise<void> {
   if (tab.id === undefined || tab.windowId === undefined) return;
+  // Only YouTube tabs have the content script that can fill the window — never
+  // trap an arbitrary page in a chromeless window it can't escape from.
+  if (!isYouTube(tab.url)) return;
 
-  chromelessOrigin.set(tab.id, tab.windowId);
+  const originWindowId = tab.windowId;
 
-  // type: 'popup' drops the tab strip / address bar / bookmarks bar,
-  // state: 'maximized' fills the screen without taking a separate Space.
-  await chrome.windows.create({
-    tabId: tab.id,
-    type: 'popup',
-    state: 'maximized',
-  });
+  let createdWindow: chrome.windows.Window | undefined;
+  try {
+    // type: 'popup' drops the tab strip / address bar / bookmarks bar,
+    // state: 'maximized' fills the screen without taking a separate Space.
+    createdWindow = await chrome.windows.create({
+      tabId: tab.id,
+      type: 'popup',
+      state: 'maximized',
+    });
+  } catch (error) {
+    console.warn('[YouTube WFS] Failed to open chromeless window', error);
+    return;
+  }
 
+  // Some platforms ignore `state` on creation of a popup — enforce it.
+  if (createdWindow?.id !== undefined && createdWindow.state !== 'maximized') {
+    try {
+      await chrome.windows.update(createdWindow.id, { state: 'maximized' });
+    } catch {
+      // Best effort — the window still opened.
+    }
+  }
+
+  await rememberOrigin(tab.id, originWindowId);
   await sendToTab(tab.id, { action: 'applyChromeless' });
 }
 
@@ -40,8 +94,7 @@ async function exitChromeless(tab: chrome.tabs.Tab): Promise<void> {
 
   await sendToTab(tab.id, { action: 'removeChromeless' });
 
-  const originWindowId = chromelessOrigin.get(tab.id);
-  chromelessOrigin.delete(tab.id);
+  const originWindowId = await takeOrigin(tab.id);
 
   // Prefer moving the tab back into the window it came from.
   if (originWindowId !== undefined) {
@@ -60,16 +113,41 @@ async function exitChromeless(tab: chrome.tabs.Tab): Promise<void> {
 }
 
 /**
- * Toggle chromeless mode for a tab based on its current state.
+ * Toggle chromeless mode for a tab based on its persisted state.
+ *
+ * chrome.storage.session survives service-worker eviction for the whole browser
+ * session, so the stored mapping is an authoritative source of truth — we do
+ * NOT guess from window.type (which would misfire on popup windows the user
+ * opened themselves and wrongly tear them apart).
  */
 async function toggleChromeless(tab: chrome.tabs.Tab | undefined): Promise<void> {
   if (!tab || tab.id === undefined) return;
 
-  if (chromelessOrigin.has(tab.id)) {
+  if (await hasOrigin(tab.id)) {
     await exitChromeless(tab);
   } else {
     await enterChromeless(tab);
   }
+}
+
+// Serialize all toggles. chrome.storage.session get→set is not atomic, so
+// concurrent toggles (shortcut spam, multiple windows) could clobber each
+// other's origin entries; running them one at a time also prevents a double
+// "enter" from opening two popup windows for the same tab.
+let operationChain: Promise<void> = Promise.resolve();
+
+function enqueueToggle(resolveTab: () => Promise<chrome.tabs.Tab | undefined>): void {
+  operationChain = operationChain
+    .then(resolveTab)
+    .then((tab) => toggleChromeless(tab))
+    .catch((error) => {
+      console.warn('[YouTube WFS] Chromeless toggle failed', error);
+    });
+}
+
+async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tabs[0];
 }
 
 /**
@@ -84,42 +162,25 @@ async function sendToTab(tabId: number, message: unknown): Promise<void> {
   }
 }
 
-/**
- * Resolve the active tab of the current window.
- */
-function withActiveTab(callback: (tab: chrome.tabs.Tab | undefined) => void): void {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    callback(tabs[0]);
-  });
-}
-
 // Keyboard shortcut (works even inside the chromeless popup, where there is no
 // toolbar icon, so this is the primary way to exit).
 chrome.commands.onCommand.addListener((command) => {
   if (command !== 'toggle-chromeless') return;
-  withActiveTab((tab) => {
-    void toggleChromeless(tab);
-  });
+  enqueueToggle(getActiveTab);
 });
 
 // Messages from the popup UI (sender.tab is undefined) or the content script
 // (sender.tab is the tab itself, e.g. an Escape-key exit request).
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request?.action === 'toggleChromeless') {
-    if (sender.tab) {
-      void toggleChromeless(sender.tab);
-      sendResponse({ ok: true });
-    } else {
-      withActiveTab((tab) => {
-        void toggleChromeless(tab);
-      });
-      sendResponse({ ok: true });
-    }
+    const senderTab = sender.tab;
+    enqueueToggle(senderTab ? async () => senderTab : getActiveTab);
+    sendResponse({ ok: true });
     return true;
   }
 });
 
 // Forget tabs that get closed while in chromeless mode.
 chrome.tabs.onRemoved.addListener((tabId) => {
-  chromelessOrigin.delete(tabId);
+  void takeOrigin(tabId);
 });

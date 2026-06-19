@@ -127,7 +127,11 @@ function exitPseudoFullscreen(): void {
  */
 function requestToggleChromeless(): void {
   try {
-    chrome.runtime.sendMessage({ action: 'toggleChromeless' });
+    chrome.runtime.sendMessage({ action: 'toggleChromeless' }, () => {
+      // Reading lastError suppresses the "no receiver" unchecked-error warning
+      // that can occur while the service worker is spinning up.
+      void chrome.runtime.lastError;
+    });
   } catch (error) {
     console.warn('[YouTube WFS] Failed to request chromeless toggle', error);
   }
@@ -142,6 +146,11 @@ function handleRuntimeMessage(message: { action?: string }): void {
     isChromelessActive = true;
     const player = getMoviePlayer();
     if (player) applyPseudoFullscreen(player);
+    // The popup window finishes maximizing asynchronously; the resize fired
+    // inside applyPseudoFullscreen can land before the new size settles, leaving
+    // the player canvas sized for the old window. Nudge it again afterwards.
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
   } else if (message?.action === 'removeChromeless') {
     isChromelessActive = false;
     exitPseudoFullscreen();
