@@ -33,6 +33,19 @@ function getMoviePlayer(): HTMLElement | null {
 }
 
 /**
+ * Whether the player is the active, on-screen video player.
+ *
+ * YouTube keeps an idle #movie_player in the DOM even on non-watch pages
+ * (home feed, search results, ...) — left over from SPA navigation or the
+ * miniplayer — but it lives inside a hidden container so it has no layout box.
+ * Checking only for existence would let 'f' toggle pseudo-fullscreen on those
+ * pages, hiding the masthead/guide for nothing. Require a real layout box.
+ */
+function isPlayerActive(player: HTMLElement): boolean {
+  return player.offsetWidth > 0 && player.offsetHeight > 0;
+}
+
+/**
  * Apply pseudo-fullscreen styling
  */
 function applyPseudoFullscreen(player: HTMLElement): void {
@@ -73,6 +86,8 @@ function togglePseudoFullscreen(): void {
   if (isPseudoFullscreenActive) {
     removePseudoFullscreen(player);
   } else {
+    // Never enter pseudo-fullscreen for an idle/off-screen player
+    if (!isPlayerActive(player)) return;
     applyPseudoFullscreen(player);
   }
 }
@@ -95,9 +110,11 @@ function handleKeyDown(event: KeyboardEvent): void {
       return;
     }
 
-    // Only intercept when a video player actually exists on the page
-    // (avoids hijacking 'f' on the home page, search results, etc.)
-    if (!getMoviePlayer()) {
+    // Only intercept when an actually-visible video player exists.
+    // (avoids hijacking 'f' on the home page, search results, etc., where
+    // an idle off-screen #movie_player may still linger in the DOM)
+    const player = getMoviePlayer();
+    if (!player || !isPlayerActive(player)) {
       return;
     }
 
