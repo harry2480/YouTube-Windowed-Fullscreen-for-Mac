@@ -7,3 +7,6 @@ build/
 .env.local
 .cache/
 .vite/
+
+# 配布用zip（ビルド成果物）
+*.zip

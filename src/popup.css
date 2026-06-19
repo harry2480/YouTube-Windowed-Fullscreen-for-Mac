@@ -123,6 +123,47 @@ body {
   line-height: 1.5;
 }
 
+.chromeless-group {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chromeless-button {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #3b82f6;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.chromeless-button:hover {
+  background: #2563eb;
+}
+
+.chromeless-button:active {
+  background: #1d4ed8;
+}
+
+.chromeless-group .info-text {
+  color: #6b7280;
+}
+
+.chromeless-group kbd {
+  font-size: 11px;
+  font-family: inherit;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
 .footer {
   margin-top: 16px;
   padding-top: 12px;
