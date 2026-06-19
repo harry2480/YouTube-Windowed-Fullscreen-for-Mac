@@ -136,13 +136,20 @@ async function toggleChromeless(tab: chrome.tabs.Tab | undefined): Promise<void>
 // "enter" from opening two popup windows for the same tab.
 let operationChain: Promise<void> = Promise.resolve();
 
-function enqueueToggle(resolveTab: () => Promise<chrome.tabs.Tab | undefined>): void {
+function enqueue(operation: () => Promise<unknown>): void {
   operationChain = operationChain
-    .then(resolveTab)
-    .then((tab) => toggleChromeless(tab))
+    .then(operation)
+    .then(() => undefined)
     .catch((error) => {
-      console.warn('[YouTube WFS] Chromeless toggle failed', error);
+      console.warn('[YouTube WFS] Chromeless operation failed', error);
     });
+}
+
+function enqueueToggle(resolveTab: () => Promise<chrome.tabs.Tab | undefined>): void {
+  enqueue(async () => {
+    const tab = await resolveTab();
+    await toggleChromeless(tab);
+  });
 }
 
 async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
@@ -180,7 +187,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-// Forget tabs that get closed while in chromeless mode.
+// Forget tabs that get closed while in chromeless mode. Routed through the same
+// queue so cleanup runs after any in-flight enter (which writes the origin),
+// preventing a dead entry from lingering in storage.
 chrome.tabs.onRemoved.addListener((tabId) => {
-  void takeOrigin(tabId);
+  enqueue(() => takeOrigin(tabId));
 });
