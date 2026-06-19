@@ -13,6 +13,9 @@ let isPseudoFullscreenActive = false;
 // to a different element later (SPA navigation, miniplayer), so we keep the
 // original reference to guarantee a clean, symmetric exit.
 let activePlayer: HTMLElement | null = null;
+// Whether this tab is currently displayed inside a chromeless popup window
+// (driven by the background service worker).
+let isChromelessActive = false;
 
 /**
  * Check if the focused element is an input field
@@ -120,6 +123,41 @@ function exitPseudoFullscreen(): void {
 }
 
 /**
+ * Ask the background worker to toggle the chromeless popup window for this tab.
+ */
+function requestToggleChromeless(): void {
+  try {
+    chrome.runtime.sendMessage({ action: 'toggleChromeless' }, () => {
+      // Reading lastError suppresses the "no receiver" unchecked-error warning
+      // that can occur while the service worker is spinning up.
+      void chrome.runtime.lastError;
+    });
+  } catch (error) {
+    console.warn('[YouTube WFS] Failed to request chromeless toggle', error);
+  }
+}
+
+/**
+ * React to chromeless window changes driven by the background worker: fill the
+ * popup with the video on enter, restore the page on exit.
+ */
+function handleRuntimeMessage(message: { action?: string }): void {
+  if (message?.action === 'applyChromeless') {
+    isChromelessActive = true;
+    const player = getMoviePlayer();
+    if (player) applyPseudoFullscreen(player);
+    // The popup window finishes maximizing asynchronously; the resize fired
+    // inside applyPseudoFullscreen can land before the new size settles, leaving
+    // the player canvas sized for the old window. Nudge it again afterwards.
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
+  } else if (message?.action === 'removeChromeless') {
+    isChromelessActive = false;
+    exitPseudoFullscreen();
+  }
+}
+
+/**
  * Handle keyboard events
  */
 function handleKeyDown(event: KeyboardEvent): void {
@@ -153,11 +191,20 @@ function handleKeyDown(event: KeyboardEvent): void {
     togglePseudoFullscreen();
   }
 
-  // Handle 'Escape' key to exit fullscreen
-  if (event.key === 'Escape' && isPseudoFullscreenActive) {
+  // Handle 'Escape' key to exit fullscreen. Chromeless mode can be active even
+  // when pseudo-fullscreen is not (e.g. opened on a page with no active player),
+  // so Escape must still be able to leave it.
+  if (event.key === 'Escape' && (isPseudoFullscreenActive || isChromelessActive)) {
     event.preventDefault();
     event.stopImmediatePropagation();
-    exitPseudoFullscreen();
+    // In a chromeless popup there is no toolbar icon to exit from, so Escape
+    // asks the background worker to move the tab back to a normal window. The
+    // CSS is removed when the resulting 'removeChromeless' message arrives.
+    if (isChromelessActive) {
+      requestToggleChromeless();
+    } else if (isPseudoFullscreenActive) {
+      exitPseudoFullscreen();
+    }
   }
 }
 
@@ -217,6 +264,9 @@ function init(): void {
     document.addEventListener('keydown', handleKeyDown, true);
     document.addEventListener('click', handleGlobalClick, true);
     document.addEventListener('dblclick', handleDoubleClick, true);
+
+    // React to chromeless-window changes from the background worker
+    chrome.runtime.onMessage.addListener(handleRuntimeMessage);
 
     // Listen for storage changes (when user toggles in popup)
     chrome.storage.onChanged.addListener((changes) => {

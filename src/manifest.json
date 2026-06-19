@@ -11,11 +11,25 @@
   "permissions": [
     "scripting",
     "storage",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "https://www.youtube.com/*"
   ],
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
+  "commands": {
+    "toggle-chromeless": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
+      "description": "クロムレス最大化ウィンドウの切り替え"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],

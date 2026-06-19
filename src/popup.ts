@@ -30,6 +30,15 @@ try {
     });
   });
 
+  // Open the active tab in a chromeless, maximized window
+  const chromelessButton = document.getElementById('chromeless-button');
+  chromelessButton?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ action: 'toggleChromeless' }, () => {
+      // The window changes; close the popup so focus follows the new window.
+      window.close();
+    });
+  });
+
   console.log('[YouTube WFS] Popup script initialized');
 } catch (error) {
   console.error('[YouTube WFS] Popup initialization error:', error);
