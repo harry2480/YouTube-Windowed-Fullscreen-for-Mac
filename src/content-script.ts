@@ -9,6 +9,10 @@ const MOVIE_PLAYER_SELECTOR = '#movie_player';
 // State
 let isFullscreenEnabled = true;
 let isPseudoFullscreenActive = false;
+// The player we entered pseudo-fullscreen with. getMoviePlayer() may resolve
+// to a different element later (SPA navigation, miniplayer), so we keep the
+// original reference to guarantee a clean, symmetric exit.
+let activePlayer: HTMLElement | null = null;
 
 /**
  * Check if the focused element is an input field
@@ -66,6 +70,7 @@ function applyPseudoFullscreen(player: HTMLElement): void {
 
   console.log('[YouTube WFS] Pseudo-fullscreen applied via CSS class');
   isPseudoFullscreenActive = true;
+  activePlayer = player;
 }
 
 /**
@@ -80,21 +85,37 @@ function removePseudoFullscreen(player: HTMLElement): void {
 
   console.log('[YouTube WFS] Pseudo-fullscreen removed via CSS class');
   isPseudoFullscreenActive = false;
+  activePlayer = null;
 }
 
 /**
  * Toggle pseudo-fullscreen
  */
 function togglePseudoFullscreen(): void {
-  const player = getMoviePlayer();
-  if (!player) return;
-
   if (isPseudoFullscreenActive) {
+    exitPseudoFullscreen();
+    return;
+  }
+
+  // Never enter pseudo-fullscreen for a missing, idle/off-screen, or miniplayer player
+  const player = getMoviePlayer();
+  if (!player || !isPlayerActive(player)) return;
+  applyPseudoFullscreen(player);
+}
+
+/**
+ * Exit pseudo-fullscreen using the player we entered with (falling back to the
+ * current one), guarding against the element having disappeared from the DOM.
+ */
+function exitPseudoFullscreen(): void {
+  const player = activePlayer ?? getMoviePlayer();
+  if (player) {
     removePseudoFullscreen(player);
   } else {
-    // Never enter pseudo-fullscreen for an idle/off-screen player
-    if (!isPlayerActive(player)) return;
-    applyPseudoFullscreen(player);
+    // Element is gone but state lingers — at least restore the page chrome.
+    document.body.classList.remove('yw-fullscreen-active');
+    isPseudoFullscreenActive = false;
+    activePlayer = null;
   }
 }
 
@@ -136,7 +157,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && isPseudoFullscreenActive) {
     event.preventDefault();
     event.stopImmediatePropagation();
-    removePseudoFullscreen(getMoviePlayer()!);
+    exitPseudoFullscreen();
   }
 }
 
@@ -225,10 +246,7 @@ function cleanup(): void {
     
     // Exit fullscreen if active
     if (isPseudoFullscreenActive) {
-      const player = getMoviePlayer();
-      if (player) {
-        removePseudoFullscreen(player);
-      }
+      exitPseudoFullscreen();
     }
     
     console.log('[YouTube WFS] Content script cleaned up');
