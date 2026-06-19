@@ -191,8 +191,10 @@ function handleKeyDown(event: KeyboardEvent): void {
     togglePseudoFullscreen();
   }
 
-  // Handle 'Escape' key to exit fullscreen
-  if (event.key === 'Escape' && isPseudoFullscreenActive) {
+  // Handle 'Escape' key to exit fullscreen. Chromeless mode can be active even
+  // when pseudo-fullscreen is not (e.g. opened on a page with no active player),
+  // so Escape must still be able to leave it.
+  if (event.key === 'Escape' && (isPseudoFullscreenActive || isChromelessActive)) {
     event.preventDefault();
     event.stopImmediatePropagation();
     // In a chromeless popup there is no toolbar icon to exit from, so Escape
@@ -200,7 +202,7 @@ function handleKeyDown(event: KeyboardEvent): void {
     // CSS is removed when the resulting 'removeChromeless' message arrives.
     if (isChromelessActive) {
       requestToggleChromeless();
-    } else {
+    } else if (isPseudoFullscreenActive) {
       exitPseudoFullscreen();
     }
   }
