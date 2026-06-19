@@ -9,6 +9,10 @@ const MOVIE_PLAYER_SELECTOR = '#movie_player';
 // State
 let isFullscreenEnabled = true;
 let isPseudoFullscreenActive = false;
+// The player we entered pseudo-fullscreen with. getMoviePlayer() may resolve
+// to a different element later (SPA navigation, miniplayer), so we keep the
+// original reference to guarantee a clean, symmetric exit.
+let activePlayer: HTMLElement | null = null;
 
 /**
  * Check if the focused element is an input field
@@ -33,6 +37,25 @@ function getMoviePlayer(): HTMLElement | null {
 }
 
 /**
+ * Whether the player is the active, on-screen video player.
+ *
+ * YouTube keeps an idle #movie_player in the DOM even on non-watch pages
+ * (home feed, search results, ...) — left over from SPA navigation or the
+ * miniplayer — but it lives inside a hidden container so it has no layout box.
+ * Checking only for existence would let 'f' toggle pseudo-fullscreen on those
+ * pages, hiding the masthead/guide for nothing. Require a real layout box.
+ */
+function isPlayerActive(player: HTMLElement): boolean {
+  // Must have a real layout box (excludes the idle off-screen player).
+  if (player.offsetWidth === 0 || player.offsetHeight === 0) return false;
+  // Must not be the small corner miniplayer — it is visible but going
+  // "fullscreen" from it would hide the masthead/guide of whatever page
+  // the user is actually browsing.
+  if (player.closest('ytd-miniplayer')) return false;
+  return true;
+}
+
+/**
  * Apply pseudo-fullscreen styling
  */
 function applyPseudoFullscreen(player: HTMLElement): void {
@@ -47,6 +70,7 @@ function applyPseudoFullscreen(player: HTMLElement): void {
 
   console.log('[YouTube WFS] Pseudo-fullscreen applied via CSS class');
   isPseudoFullscreenActive = true;
+  activePlayer = player;
 }
 
 /**
@@ -61,19 +85,37 @@ function removePseudoFullscreen(player: HTMLElement): void {
 
   console.log('[YouTube WFS] Pseudo-fullscreen removed via CSS class');
   isPseudoFullscreenActive = false;
+  activePlayer = null;
 }
 
 /**
  * Toggle pseudo-fullscreen
  */
 function togglePseudoFullscreen(): void {
-  const player = getMoviePlayer();
-  if (!player) return;
-
   if (isPseudoFullscreenActive) {
+    exitPseudoFullscreen();
+    return;
+  }
+
+  // Never enter pseudo-fullscreen for a missing, idle/off-screen, or miniplayer player
+  const player = getMoviePlayer();
+  if (!player || !isPlayerActive(player)) return;
+  applyPseudoFullscreen(player);
+}
+
+/**
+ * Exit pseudo-fullscreen using the player we entered with (falling back to the
+ * current one), guarding against the element having disappeared from the DOM.
+ */
+function exitPseudoFullscreen(): void {
+  const player = activePlayer ?? getMoviePlayer();
+  if (player) {
     removePseudoFullscreen(player);
   } else {
-    applyPseudoFullscreen(player);
+    // Element is gone but state lingers — at least restore the page chrome.
+    document.body.classList.remove('yw-fullscreen-active');
+    isPseudoFullscreenActive = false;
+    activePlayer = null;
   }
 }
 
@@ -95,9 +137,11 @@ function handleKeyDown(event: KeyboardEvent): void {
       return;
     }
 
-    // Only intercept when a video player actually exists on the page
-    // (avoids hijacking 'f' on the home page, search results, etc.)
-    if (!getMoviePlayer()) {
+    // Only intercept when an actually-visible video player exists.
+    // (avoids hijacking 'f' on the home page, search results, etc., where
+    // an idle off-screen #movie_player may still linger in the DOM)
+    const player = getMoviePlayer();
+    if (!player || !isPlayerActive(player)) {
       return;
     }
 
@@ -113,7 +157,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && isPseudoFullscreenActive) {
     event.preventDefault();
     event.stopImmediatePropagation();
-    removePseudoFullscreen(getMoviePlayer()!);
+    exitPseudoFullscreen();
   }
 }
 
@@ -202,10 +246,7 @@ function cleanup(): void {
     
     // Exit fullscreen if active
     if (isPseudoFullscreenActive) {
-      const player = getMoviePlayer();
-      if (player) {
-        removePseudoFullscreen(player);
-      }
+      exitPseudoFullscreen();
     }
     
     console.log('[YouTube WFS] Content script cleaned up');
