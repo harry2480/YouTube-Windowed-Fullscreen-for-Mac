@@ -6,7 +6,13 @@
  * "maximized" window state (not "fullscreen"), macOS does NOT create a new
  * Space/desktop — which is the whole point of this extension. The tab itself is
  * moved (not reloaded), so playback position, login and player state are kept.
+ *
+ * The feature is not YouTube-specific — moving a tab into a popup window needs
+ * no page knowledge — so it runs on any origin the user has opted in to via the
+ * popup. The allow-list lives in chrome.storage.sync (see sites.ts).
  */
+
+import { isOriginActionable } from './sites';
 
 // MV3 service workers are evicted when idle, so in-memory state would be lost
 // mid-session (e.g. the user watches for a minute, then can't exit). We persist
@@ -43,19 +49,17 @@ async function hasOrigin(tabId: number): Promise<boolean> {
   return tabId in origins;
 }
 
-function isYouTube(url: string | undefined): boolean {
-  return !!url && url.startsWith('https://www.youtube.com/');
-}
-
 /**
  * Move the given tab into a borderless, maximized popup window and tell its
  * content script to fill the window with the video.
  */
 async function enterChromeless(tab: chrome.tabs.Tab): Promise<void> {
   if (tab.id === undefined || tab.windowId === undefined) return;
-  // Only YouTube tabs have the content script that can fill the window — never
-  // trap an arbitrary page in a chromeless window it can't escape from.
-  if (!isYouTube(tab.url)) return;
+  // Only act on origins the user has opted in to AND granted host permission
+  // for on this device. This is what keeps us from trapping an arbitrary page
+  // in a chromeless window it can't escape from — the user has explicitly
+  // approved every site that reaches this point.
+  if (!(await isOriginActionable(tab.url))) return;
 
   const originWindowId = tab.windowId;
 
