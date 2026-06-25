@@ -39,6 +39,12 @@ export function originFromUrl(url: string | undefined): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    // Chrome host-permission match patterns don't support port numbers, but
+    // URL.origin keeps a non-default port ("https://x.com:8080"). Feeding that
+    // to permissions.request/contains throws "Invalid match pattern", so reject
+    // non-default-port origins rather than generate a broken pattern. (Default
+    // ports are normalised away, leaving parsed.port empty.)
+    if (parsed.port !== '') return null;
     return parsed.origin;
   } catch {
     return null;

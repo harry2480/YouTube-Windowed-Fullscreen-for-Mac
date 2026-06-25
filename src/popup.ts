@@ -10,7 +10,6 @@
 import {
   addUserOrigin,
   getAllowedOrigins,
-  getUserOrigins,
   hasHostPermission,
   isDefaultOrigin,
   originFromUrl,
@@ -175,14 +174,12 @@ try {
 
   /** Request the host permission and persist the origin to the allow-list. */
   async function allowOrigin(origin: string): Promise<void> {
-    // Record intent BEFORE requesting: on some platforms the permission dialog
-    // dismisses the action popup, tearing down this context mid-await, so a
-    // post-grant write could be lost. Persisting first means a granted origin
-    // is always listed. We only roll back a *fresh* add the user declines, so a
-    // re-grant of an origin synced from another device is never deleted on "No".
-    const wasListed = isDefaultOrigin(origin) || (await getUserOrigins()).includes(origin);
-    await addUserOrigin(origin);
-
+    // chrome.permissions.request MUST run synchronously within the click's
+    // user-gesture token, which is consumed by the first await. So request
+    // FIRST — before touching storage — then persist only on success. The call
+    // is idempotent (re-granting an already-held origin just returns true), so
+    // there is no need to read the allow-list beforehand: on a fresh add a
+    // decline persists nothing, and on a re-grant the synced entry is untouched.
     let granted = false;
     try {
       granted = await chrome.permissions.request({ origins: [patternForOrigin(origin)] });
@@ -190,8 +187,8 @@ try {
       console.warn('[YouTube WFS] Permission request failed', error);
     }
 
-    if (!granted && !wasListed) {
-      await removeUserOrigin(origin);
+    if (granted) {
+      await addUserOrigin(origin);
     }
     await render();
   }
