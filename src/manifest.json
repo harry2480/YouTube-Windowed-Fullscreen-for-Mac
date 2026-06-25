@@ -42,6 +42,12 @@
       "run_at": "document_start"
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["fullscreen-interceptor.js"],
+      "matches": ["https://*/*", "http://*/*"]
+    }
+  ],
   "action": {
     "default_popup": "src/popup.html",
     "default_title": "YouTube Windowed Fullscreen",
