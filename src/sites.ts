@@ -114,3 +114,83 @@ export async function removeUserOrigin(origin: string): Promise<void> {
   if (next.length === user.length) return;
   await chrome.storage.sync.set({ [ALLOWED_SITES_KEY]: next });
 }
+
+// --- Dynamic fullscreen-interceptor registration ---------------------------
+
+/** The MAIN-world interceptor file, copied verbatim from public/ to the root. */
+const INTERCEPTOR_FILE = 'fullscreen-interceptor.js';
+/** Prefix for the registered-content-script ids we own. */
+const INTERCEPTOR_ID_PREFIX = 'ywfs-fs-';
+
+/** A collision-free registered-content-script id derived from an origin. */
+function interceptorId(origin: string): string {
+  // Encode every non-alphanumeric character to a unique "-<hex>" so that
+  // distinct origins (e.g. "a.b.com" vs "a-b.com") can never collapse to the
+  // same id, which would throw "Duplicate script ID" on registration.
+  const encoded = origin.replace(/[^A-Za-z0-9]/g, (ch) => '-' + ch.charCodeAt(0).toString(16));
+  return INTERCEPTOR_ID_PREFIX + encoded;
+}
+
+/** Ids of interceptors we have currently registered. */
+async function getRegisteredInterceptorIds(): Promise<Set<string>> {
+  try {
+    const scripts = await chrome.scripting.getRegisteredContentScripts();
+    return new Set(
+      scripts.map((s) => s.id).filter((id) => id.startsWith(INTERCEPTOR_ID_PREFIX)),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Reconcile the registered fullscreen interceptors with the desired state:
+ * one MAIN-world script per non-default origin that is both opted in AND has a
+ * granted host permission on this device.
+ *
+ * Idempotent and safe to call from any trigger (install, startup, permission
+ * change, allow-list change). YouTube is excluded — it has its own static
+ * content script with a tailored pseudo-fullscreen.
+ */
+export async function reconcileInterceptors(): Promise<void> {
+  const allowed = await getAllowedOrigins();
+  const candidates = allowed.filter((origin) => !isDefaultOrigin(origin));
+
+  const granted: string[] = [];
+  for (const origin of candidates) {
+    if (await hasHostPermission(origin)) granted.push(origin);
+  }
+
+  const wantedIds = new Set(granted.map(interceptorId));
+  const existingIds = await getRegisteredInterceptorIds();
+
+  const toRegister = granted.filter((origin) => !existingIds.has(interceptorId(origin)));
+  if (toRegister.length > 0) {
+    const scripts = toRegister.map(
+      (origin): chrome.scripting.RegisteredContentScript => ({
+        id: interceptorId(origin),
+        matches: [patternForOrigin(origin)],
+        js: [INTERCEPTOR_FILE],
+        runAt: 'document_start',
+        allFrames: true,
+        // MAIN world (Chrome 111+) so overriding Element.prototype affects the
+        // page's own requestFullscreen() calls, not just our isolated copy.
+        world: 'MAIN',
+      }),
+    );
+    try {
+      await chrome.scripting.registerContentScripts(scripts);
+    } catch (error) {
+      console.warn('[YouTube WFS] Failed to register fullscreen interceptors', error);
+    }
+  }
+
+  const staleIds = [...existingIds].filter((id) => !wantedIds.has(id));
+  if (staleIds.length > 0) {
+    try {
+      await chrome.scripting.unregisterContentScripts({ ids: staleIds });
+    } catch (error) {
+      console.warn('[YouTube WFS] Failed to unregister fullscreen interceptors', error);
+    }
+  }
+}

@@ -12,7 +12,7 @@
  * popup. The allow-list lives in chrome.storage.sync (see sites.ts).
  */
 
-import { isOriginActionable } from './sites';
+import { ALLOWED_SITES_KEY, isOriginActionable, reconcileInterceptors } from './sites';
 
 // MV3 service workers are evicted when idle, so in-memory state would be lost
 // mid-session (e.g. the user watches for a minute, then can't exit). We persist
@@ -196,4 +196,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // preventing a dead entry from lingering in storage.
 chrome.tabs.onRemoved.addListener((tabId) => {
   enqueue(() => takeOrigin(tabId));
+});
+
+// Keep the dynamically-registered fullscreen interceptors in sync with the
+// allow-list and the granted host permissions. Both the permission grant and
+// the allow-list write happen when the user adds a site (from the popup); we
+// reconcile on either signal so the final state is correct regardless of order,
+// and on install/startup so updates re-establish the registrations. All runs go
+// through the same queue as the chromeless toggles to serialise storage access.
+function scheduleReconcile(): void {
+  enqueue(reconcileInterceptors);
+}
+
+chrome.runtime.onInstalled.addListener(scheduleReconcile);
+chrome.runtime.onStartup.addListener(scheduleReconcile);
+chrome.permissions.onAdded.addListener(scheduleReconcile);
+chrome.permissions.onRemoved.addListener(scheduleReconcile);
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && ALLOWED_SITES_KEY in changes) scheduleReconcile();
 });
